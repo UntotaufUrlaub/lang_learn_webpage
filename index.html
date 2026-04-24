@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Japanese Conversation Sparring</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #setup {
+    max-width: 500px;
+    margin: auto;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  #setup h1 { text-align: center; font-size: 1.4rem; color: #e94560; }
+  #setup label { font-size: 0.85rem; color: #aaa; }
+  #setup input {
+    width: 100%;
+    padding: 0.6rem;
+    background: #16213e;
+    border: 1px solid #333;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 0.95rem;
+  }
+  #setup button {
+    padding: 0.7rem;
+    background: #e94560;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  #setup button:hover { background: #c73650; }
+
+  #chat-container {
+    display: none;
+    flex-direction: column;
+    height: 100vh;
+  }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  .msg {
+    max-width: 80%;
+    padding: 0.7rem 1rem;
+    border-radius: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: #16213e;
+    border: 1px solid #333;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: #0f3460;
+    border: 1px solid #1a4a7a;
+  }
+  .msg.system-info {
+    align-self: center;
+    background: #2a1a3e;
+    border: 1px solid #4a2a6e;
+    font-size: 0.85rem;
+    color: #caa;
+    max-width: 90%;
+  }
+  #input-area {
+    display: flex;
+    padding: 0.8rem;
+    gap: 0.5rem;
+    background: #16213e;
+    border-top: 1px solid #333;
+  }
+  #user-input {
+    flex: 1;
+    padding: 0.6rem;
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 1rem;
+  }
+  #send-btn {
+    padding: 0.6rem 1.2rem;
+    background: #e94560;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+  #send-btn:hover { background: #c73650; }
+  #send-btn:disabled { background: #555; cursor: not-allowed; }
+  #user-input:disabled { background: #2a2a2a; }
+  .spinner {
+    display: inline-block;
+    width: 1.2em;
+    height: 1.2em;
+    border: 2px solid #555;
+    border-top-color: #e94560;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 0.4em;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <h1>Japanese Conversation Sparring</h1>
+  <div>
+    <label>OpenRouter API Key</label>
+    <input type="password" id="api-key" placeholder="sk-or-..." />
+  </div>
+  <div>
+    <label>Model (OpenRouter model ID)</label>
+    <input type="text" id="model-id" value="google/gemini-2.5-flash-preview" />
+  </div>
+  <button id="start-btn">Start</button>
+</div>
+
+<div id="chat-container">
+  <div id="messages"></div>
+  <div id="input-area">
+    <input type="text" id="user-input" placeholder="Type in Japanese (kana)..." disabled />
+    <button id="send-btn" disabled>Send</button>
+  </div>
+</div>
+
+<script>
+// ── Vocab: kana → english ──────────────────────────────────────────
+const VOCAB = {
+  "わたし": "I",
+  "わたしたち": "we",
+  "あなた": "you",
+  "あのひと": "that person, he, she",
+  "あのかた": "that person, he, she (polite)",
+  "みなさん": "ladies and gentlemen, all of you",
+  "せんせい": "teacher, instructor",
+  "きょうし": "teacher, instructor",
+  "がくせい": "student",
+  "かいしゃいん": "company employee",
+  "しゃいん": "employee of ~ company",
+  "ぎんこういん": "bank employee",
+  "いしゃ": "medical doctor",
+  "けんきゅうしゃ": "researcher, scholar",
+  "エンジニア": "engineer",
+  "だいがく": "university",
+  "びょういん": "hospital",
+  "でんき": "electricity, light",
+  "だれ": "who",
+  "どなた": "who (polite)",
+  "はい": "yes",
+  "いいえ": "no",
+  "しつれいですが": "Excuse me, but",
+  "おなまえは": "May I have your name?",
+  "はじめまして": "How do you do?",
+  "どうぞよろしく（おねがいします）": "Pleased to meet you",
+  "こちらは～さんです": "This is Mr./Ms. ~",
+  "～からきました": "I came from ~",
+  "アメリカ": "U.S.A.",
+  "イギリス": "U.K.",
+  "インド": "India",
+  "インドネシア": "Indonesia",
+  "かんこく": "South Korea",
+  "タイ": "Thailand",
+  "ちゅうごく": "China",
+  "ドイツ": "Germany",
+  "にほん": "Japan",
+  "フランス": "France",
+  "ブラジル": "Brazil",
+  "これ": "this (thing here)",
+  "それ": "that (thing near you)",
+  "あれ": "that (thing over there)",
+  "この～": "this ~",
+  "その～": "that ~",
+  "あの～": "that ~ over there",
+  "ほん": "book",
+  "じしょ": "dictionary",
+  "ざっし": "magazine",
+  "しんぶん": "newspaper",
+  "ノート": "notebook",
+  "てちょう": "pocket notebook",
+  "めいし": "business card",
+  "カード": "card",
+  "えんぴつ": "pencil",
+  "ボールペン": "ballpoint pen",
+  "かぎ": "key",
+  "とけい": "watch, clock",
+  "かさ": "umbrella",
+  "かばん": "bag, briefcase",
+  "テレビ": "television",
+  "ラジオ": "radio",
+  "カメラ": "camera",
+  "コンピューター": "computer",
+  "じどうしゃ": "automobile, car",
+  "つくえ": "desk",
+  "いす": "chair",
+  "チョコレート": "chocolate",
+  "コーヒー": "coffee",
+  "えいご": "the English language",
+  "にほんご": "the Japanese language",
+  "なん": "what",
+  "そう": "so",
+  "ちがいます": "No, you are wrong",
+  "そうですか": "I see, Is that so?",
+  "あのう": "well (hesitation)",
+  "どうぞ": "Please, Here you are",
+  "どうも": "Well, thanks",
+  "ありがとう": "Thank you",
+  "どうもありがとうございます": "Thank you very much",
+  "ここ": "here, this place",
+  "そこ": "there, that place near you",
+  "あそこ": "that place over there",
+  "どこ": "where",
+  "こちら": "this way (polite)",
+  "そちら": "that way (polite)",
+  "あちら": "that way over there (polite)",
+  "どちら": "which way, where (polite)",
+  "きょうしつ": "classroom",
+  "しょくどう": "dining hall, canteen",
+  "じむしょ": "office",
+  "かいぎしつ": "conference room",
+  "うけつけ": "reception desk",
+  "ロビー": "lobby",
+  "へや": "room",
+  "トイレ": "toilet, restroom",
+  "おてあらい": "toilet, restroom (polite)",
+  "かいだん": "staircase",
+  "エレベーター": "elevator",
+  "エスカレーター": "escalator",
+  "くに": "country",
+  "かいしゃ": "company",
+  "うち": "house, home",
+  "でんわ": "telephone",
+  "くつ": "shoes",
+  "ネクタイ": "necktie",
+  "ワイン": "wine",
+  "たばこ": "tobacco, cigarette",
+  "うりば": "department, counter",
+  "ちか": "basement",
+  "いくら": "how much",
+  "ひゃく": "hundred",
+  "せん": "thousand",
+  "まん": "ten thousand",
+  "すみません": "Excuse me",
+  "おきます": "get up, wake up",
+  "ねます": "sleep, go to bed",
+  "はたらきます": "work",
+  "やすみます": "take a rest, take a holiday",
+  "べんきょうします": "study",
+  "おわります": "finish",
+  "デパート": "department store",
+  "ぎんこう": "bank",
+  "ゆうびんきょく": "post office",
+  "としょかん": "library",
+  "びじゅつかん": "art museum",
+  "いま": "now",
+  "はん": "half",
+  "なんじ": "what time",
+  "ごぜん": "a.m., morning",
+  "ごご": "p.m., afternoon",
+  "あさ": "morning",
+  "ひる": "daytime, noon",
+  "ばん": "night, evening",
+  "よる": "night, evening",
+  "おととい": "the day before yesterday",
+  "きのう": "yesterday",
+  "きょう": "today",
+  "あした": "tomorrow",
+  "あさって": "the day after tomorrow",
+  "けさ": "this morning",
+  "こんばん": "this evening, tonight",
+  "やすみ": "rest, a holiday",
+  "ひるやすみ": "lunchtime",
+  "まいあさ": "every morning",
+  "まいばん": "every evening",
+  "まいにち": "every day",
+  "げつようび": "Monday",
+  "かようび": "Tuesday",
+  "すいようび": "Wednesday",
+  "もくようび": "Thursday",
+  "きんようび": "Friday",
+  "どようび": "Saturday",
+  "にちようび": "Sunday",
+  "なんようび": "what day of the week",
+  "ばんごう": "number",
+  "～から": "from ~",
+  "～まで": "up to ~, until ~",
+  "～と～": "and (connecting nouns)",
+  "たいへんですね": "That's tough, isn't it?",
+  "えーと": "well, let me see",
+  "おねがいします": "Please (ask a favor)",
+  "いきます": "go",
+  "きます": "come",
+  "かえります": "go home, return",
+  "がっこう": "school",
+  "スーパー": "supermarket",
+  "えき": "station",
+  "ひこうき": "airplane",
+  "ふね": "ship",
+  "でんしゃ": "electric train",
+  "ちかてつ": "subway",
+  "しんかんせん": "bullet train",
+  "バス": "bus",
+  "タクシー": "taxi",
+  "じてんしゃ": "bicycle",
+  "あるいて": "on foot",
+  "ひと": "person, people",
+  "ともだち": "friend",
+  "かれ": "he, boyfriend",
+  "かのじょ": "she, girlfriend",
+  "かぞく": "family",
+  "ひとりで": "alone, by oneself",
+  "せんしゅう": "last week",
+  "こんしゅう": "this week",
+  "らいしゅう": "next week",
+  "せんげつ": "last month",
+  "こんげつ": "this month",
+  "らいげつ": "next month",
+  "きょねん": "last year",
+  "ことし": "this year",
+  "らいねん": "next year",
+  "いつ": "when",
+  "たんじょうび": "birthday",
+  "ふつう": "local (train)",
+  "きゅうこう": "rapid",
+  "とっきゅう": "express",
+  "つぎの": "next",
+  "どういたしまして": "You're welcome",
+  "たべます": "eat",
+  "のみます": "drink",
+  "すいます": "smoke",
+  "みます": "see, look at, watch",
+  "ききます": "hear, listen",
+  "よみます": "read",
+  "かきます": "write, draw",
+  "かいます": "buy",
+  "とります": "take (a photograph)",
+  "しゃしんをとります": "take a picture",
+  "します": "do",
+  "あいます": "meet",
+  "ごはん": "a meal, cooked rice",
+  "あさごはん": "breakfast",
+  "ひるごはん": "lunch",
+  "ばんごはん": "supper",
+  "パン": "bread",
+  "たまご": "egg",
+  "にく": "meat",
+  "さかな": "fish",
+  "やさい": "vegetable",
+  "くだもの": "fruit",
+  "みず": "water",
+  "おちゃ": "tea, green tea",
+  "こうちゃ": "black tea",
+  "ぎゅうにゅう": "milk",
+  "ジュース": "juice",
+  "ビール": "beer",
+  "さけ": "alcohol, rice wine",
+  "えいが": "movie",
+  "てがみ": "letter",
+  "レポート": "report",
+  "しゃしん": "photograph",
+  "みせ": "store, shop",
+  "レストラン": "restaurant",
+  "にわ": "garden",
+  "しゅくだい": "homework",
+  "テニス": "tennis",
+  "サッカー": "soccer",
+  "はなみ": "cherry-blossom viewing",
+  "なに": "what",
+  "いっしょに": "together",
+  "ちょっと": "a little while, a little bit",
+  "いつも": "always, usually",
+  "ときどき": "sometimes",
+  "それから": "after that, and then",
+  "ええ": "yes",
+  "いいですね": "That's good.",
+  "わかりました": "I see",
+  "きります": "cut, slice",
+  "おくります": "send",
+  "あげます": "give",
+  "もらいます": "receive",
+  "かします": "lend",
+  "かります": "borrow",
+  "おしえます": "teach",
+  "ならいます": "learn",
+  "でんわをかけます": "make a phone call",
+  "て": "hand, arm",
+  "はし": "chopsticks",
+  "スプーン": "spoon",
+  "ナイフ": "knife",
+  "フォーク": "fork",
+  "はさみ": "scissors",
+  "パソコン": "personal computer",
+  "かみ": "paper",
+  "はな": "flower, blossom",
+  "シャツ": "shirt",
+  "プレゼント": "present, gift",
+  "にもつ": "baggage, parcel",
+  "おかね": "money",
+  "きっぷ": "ticket",
+  "クリスマス": "Christmas",
+  "ちち": "(my) father",
+  "はは": "(my) mother",
+  "おとうさん": "(someone's) father",
+  "おかあさん": "(someone's) mother",
+  "もう": "already",
+  "まだ": "not yet",
+  "これから": "from now on, soon",
+  "りょこう": "trip, tour",
+  "おみやげ": "souvenir, present",
+  "ハンサム": "handsome",
+  "きれい": "beautiful, clean",
+  "しずか": "quiet",
+  "にぎやか": "lively",
+  "ゆうめい": "famous",
+  "しんせつ": "kind",
+  "げんき": "healthy, cheerful",
+  "ひま": "free (time)",
+  "べんり": "convenient",
+  "すてき": "fine, nice, wonderful",
+  "おおきい": "big, large",
+  "ちいさい": "small, little",
+  "あたらしい": "new",
+  "ふるい": "old (not of age)",
+  "いい": "good",
+  "わるい": "bad",
+  "あつい": "hot",
+  "さむい": "cold (temperature)",
+  "つめたい": "cold (touch, drinks)",
+  "むずかしい": "difficult",
+  "やさしい": "easy",
+  "たかい": "expensive, tall, high",
+  "やすい": "inexpensive",
+  "ひくい": "low",
+  "おもしろい": "interesting",
+  "おいしい": "delicious, tasty",
+  "いそがしい": "busy",
+  "たのしい": "enjoyable",
+  "しろい": "white",
+  "くろい": "black",
+  "あかい": "red",
+  "あおい": "blue",
+  "さくら": "cherry blossom",
+  "やま": "mountain",
+  "まち": "town, city",
+  "たべもの": "food",
+  "くるま": "car, vehicle",
+  "ところ": "place",
+  "りょう": "dormitory",
+  "べんきょう": "study",
+  "せいかつ": "life",
+  "しごと": "work, business",
+  "どう": "how",
+  "どんな～": "what kind of ~",
+  "どれ": "which one",
+  "とても": "very",
+  "あまり": "not so (with negatives)",
+  "そして": "and (connecting sentences)",
+  "おげんきですか": "How are you?",
+  "そうですね": "Well, let me see",
+  "わかります": "understand",
+  "あります": "have, exist (inanimate)",
+  "すき": "like",
+  "きらい": "dislike",
+  "じょうず": "good at",
+  "へた": "poor at",
+  "りょうり": "dish, cooking",
+  "のみもの": "drinks",
+  "スポーツ": "sport",
+  "やきゅう": "baseball",
+  "ダンス": "dance",
+  "おんがく": "music",
+  "うた": "song",
+  "クラシック": "classical music",
+  "ジャズ": "jazz",
+  "コンサート": "concert",
+  "カラオケ": "karaoke",
+  "かぶき": "Kabuki",
+  "え": "picture, drawing",
+  "じ": "letter, character",
+  "かんじ": "Chinese characters",
+  "ひらがな": "Hiragana script",
+  "かたかな": "Katakana script",
+  "チケット": "ticket",
+  "じかん": "time",
+  "ようじ": "something to do, errand",
+  "やくそく": "appointment, promise",
+  "ごしゅじん": "(someone's) husband",
+  "おくさん": "(someone's) wife",
+  "こども": "child",
+  "よく": "well, much",
+  "だいたい": "mostly, roughly",
+  "たくさん": "many, much",
+  "すこし": "a little, a few",
+  "ぜんぜん": "not at all (with negatives)",
+  "はやく": "early, quickly, fast",
+  "どうして": "why",
+  "ざんねんです": "That's a pity",
+  "もしもし": "hello (on phone)",
+  "います": "exist, be (animate)",
+  "いろいろ": "various",
+  "おとこのひと": "man",
+  "おんなのひと": "woman",
+  "おとこのこ": "boy",
+  "おんなのこ": "girl",
+  "いぬ": "dog",
+  "ねこ": "cat",
+  "き": "tree",
+  "もの": "thing",
+  "でんち": "battery",
+  "はこ": "box",
+  "スイッチ": "switch",
+  "れいぞうこ": "refrigerator",
+  "テーブル": "table",
+  "ベッド": "bed",
+  "たな": "shelf",
+  "ドア": "door",
+  "まど": "window",
+  "ポスト": "mailbox",
+  "ビル": "building",
+  "こうえん": "park",
+  "きっさてん": "coffee shop",
+  "ほんや": "bookstore",
+  "のりば": "place to catch taxis/trains",
+  "うえ": "on, above, over",
+  "した": "under, below",
+  "まえ": "front, before",
+  "うしろ": "back, behind",
+  "みぎ": "right (side)",
+  "ひだり": "left (side)",
+  "なか": "in, inside",
+  "そと": "outside",
+  "となり": "next, next door",
+  "ちかく": "near, vicinity",
+  "あいだ": "between, among"
+};
+
+// ── Grammar rules ──────────────────────────────────────────────────
+const GRAMMAR = [
+  "NはNです (N wa N desu — A is B, used for identifying or describing something)"
+];
+
+// ── Example conversations (one picked randomly per session) ────────
+const EXAMPLES = [
+  `EXAMPLE CONVERSATION (for format and tone reference):
+Secret targets: Speaker A's word: たかい (expensive), Speaker B's word: コーヒー (coffee), Grammar: NはNです assigned to Speaker A.
+
+Scenario:
+Speaker A (the student): A foreign exchange student who recently arrived in Japan.
+Speaker B (the AI): Speaker A's coworker who suggested having lunch together at a nearby restaurant.
+It's lunchtime on a weekday. Speaker A and Speaker B just sat down at a small restaurant near the office. The menu is on the table. Speaker B has eaten here many times.
+Speaker A's goal: Ask Speaker B for recommendations and decide what to order together. Speaker A doesn't want to spend too much today.
+Speaker A speaks first.
+
+A: このみせの たべものは おいしいですか。
+B: [points at the menu] ええ、おいしいですよ。さかなの りょうりが いいですよ。
+A: さかなですか。いくらですか。
+B: 900えんです。きょうの さかなは とても いいですよ。
+A: きょうの さかな？ すみません、わかりません。
+B: きょうの さかなは あたらしいです。おいしいですよ。
+A: ああ、わかりました。900えんは ちょっと たかいです。わたしは がくせいですから。
+B: そうですか。じゃ、パンと コーヒーは どうですか。パンは 300えんですよ。
+A: いいですね。コーヒーを のみます と パンを たべます。
+B: コーヒーを のみます「と」？
+A: あ、すみません。コーヒーを のみます。そして、パンを たべます。
+B: いいですね。わたしも コーヒーを のみますよ。
+
+Targets:
+- [x] Speaker A's word: たかい — used when reacting to the price
+- [x] Speaker B's word: コーヒー — used when suggesting a cheaper option
+- [x] Grammar NはNです (Speaker A): わたしは がくせいです
+
+Feedback:
+- Speaker A used と to connect two sentences (コーヒーを のみます と パンを たべます). と connects nouns, not sentences. Use そして or それから for sentences. Self-corrected after Speaker B's clarification. [Low — corrected]
+- Speaker A asked for clarification on きょうの さかな appropriately using すみません、わかりません.
+- Natural conversation flow, good use of いくらですか and ちょっと.`,
+
+  `EXAMPLE CONVERSATION (for format and tone reference):
+Secret targets: Speaker A's word: いっしょに (together), Speaker B's word: としょかん (library), Grammar: NはNです assigned to Speaker B.
+
+Scenario:
+Speaker A (the student): A newcomer who recently moved to this neighborhood.
+Speaker B (the AI): A friendly neighbor Speaker A has met a few times.
+It's Saturday morning. Speaker A is walking near the station and runs into Speaker B. Speaker A has a lot of studying to do, but Speaker A's apartment is noisy.
+Speaker A's goal: Find out if there is a quiet place nearby to study this weekend.
+Speaker B speaks first.
+
+[waves at Speaker A from across the street]
+B: あ、おはようございます！いい てんきですね。
+
+A: おはようございます。こんしゅう、たくさん べんきょうしますが、うちは しずかじゃ ありません…
+B: ああ、そうですか。えきの ちかくに いい ところが ありますよ。あそこは としょかんです。
+A: としょかんですか。なんじから なんじまでですか。
+B: ごぜん 9じから ごご 5じまでですよ。
+A: としょかんは どこですか。
+B: としょかんは えきの みぎの おおきい ビルの となりに ありますよ。
+A: すみません、わかりません。
+B: えきの みぎです。おおきい ビルの となりです。
+A: ああ、わかりました。いいですね。ともだちと いしょに いきます。
+B: いいですね。
+
+Targets:
+- [x] Speaker A's word: いっしょに — used when saying they'll go with a friend
+- [x] Speaker B's word: としょかん — used when suggesting a study spot
+- [x] Grammar NはNです (Speaker B): あそこは としょかんです
+
+Feedback:
+- Speaker A asked for clarification on a long location description appropriately using すみません、わかりません.
+- Spelling: いしょに should be いっしょに (with small っ). The っ indicates a double consonant — without it the word is unrecognizable. [Medium]
+- Overall good level. Natural use of が for contrast (べんきょうしますが、うちは しずかじゃ ありません) and appropriate question forms (なんじから なんじまでですか).`
+];
+
+// ── State ──────────────────────────────────────────────────────────
+let apiKey = "";
+let modelId = "";
+let conversationHistory = []; // {role, content}
+let systemPrompt = "";
+let phase = ""; // "A", "B", "C"
+let studentWord = null;
+let aiWord = null;
+let grammarRule = null;
+let grammarSide = ""; // "student" or "ai"
+let finished = false;
+
+// ── Helpers ────────────────────────────────────────────────────────
+function randomPick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function pickTwoWords() {
+  const keys = Object.keys(VOCAB);
+  const i1 = Math.floor(Math.random() * keys.length);
+  let i2 = i1;
+  while (i2 === i1) i2 = Math.floor(Math.random() * keys.length);
+  return [
+    { kana: keys[i1], english: VOCAB[keys[i1]] },
+    { kana: keys[i2], english: VOCAB[keys[i2]] }
+  ];
+}
+
+// ── API Key caching (localStorage, 24h TTL) ────────────────────────
+const KEY_STORAGE = "jp_sparring_apikey";
+const MODEL_STORAGE = "jp_sparring_model";
+const KEY_TTL = 24 * 60 * 60 * 1000;
+const MODEL_TTL = 7 * 24 * 60 * 60 * 1000;
+
+function loadCached(storageKey, ttl) {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return "";
+    const { value, ts } = JSON.parse(raw);
+    if (Date.now() - ts > ttl) { localStorage.removeItem(storageKey); return ""; }
+    return value;
+  } catch { return ""; }
+}
+
+function cache(storageKey, value) {
+  localStorage.setItem(storageKey, JSON.stringify({ value, ts: Date.now() }));
+}
+
+// ── DOM refs ───────────────────────────────────────────────────────
+const setupDiv = document.getElementById("setup");
+const chatContainer = document.getElementById("chat-container");
+const messagesDiv = document.getElementById("messages");
+const userInput = document.getElementById("user-input");
+const sendBtn = document.getElementById("send-btn");
+const apiKeyInput = document.getElementById("api-key");
+const modelInput = document.getElementById("model-id");
+const startBtn = document.getElementById("start-btn");
+
+// Prefill cached values
+apiKeyInput.value = loadCached(KEY_STORAGE, KEY_TTL);
+modelInput.value = loadCached(MODEL_STORAGE, MODEL_TTL) || "google/gemini-2.5-flash-preview";
+
+// ── UI helpers ─────────────────────────────────────────────────────
+function addMessage(role, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.textContent = text;
+  messagesDiv.appendChild(div);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function addSpinner() {
+  const div = document.createElement("div");
+  div.className = "msg assistant";
+  div.id = "spinner-msg";
+  div.innerHTML = '<span class="spinner"></span> Thinking...';
+  messagesDiv.appendChild(div);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function removeSpinner() {
+  const el = document.getElementById("spinner-msg");
+  if (el) el.remove();
+}
+
+function setInputEnabled(enabled) {
+  userInput.disabled = !enabled;
+  sendBtn.disabled = !enabled;
+  if (enabled) userInput.focus();
+}
+
+// ── OpenRouter API call ────────────────────────────────────────────
+async function callLLM(messages) {
+  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + apiKey,
+    },
+    body: JSON.stringify({
+      model: modelId,
+      messages: messages
+    })
+  });
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error("OpenRouter error " + resp.status + ": " + err);
+  }
+  const data = await resp.json();
+  return data.choices[0].message.content;
+}
+
+// ── Build system prompt ────────────────────────────────────────────
+function buildSystemPrompt() {
+  const grammarOwner = grammarSide === "ai" ? "YOU (the AI)" : "the STUDENT";
+
+  return `You are a Japanese conversation practice partner for a beginner learner studying Minna no Nihongo (chapters 1-10).
+
+You are Speaker B. The student is Speaker A.
+
+RULES:
+- Use ONLY vocabulary and grammar appropriate for Minna no Nihongo chapters 1-10.
+- During the conversation phase, you must speak ONLY in Japanese, written entirely in kana (hiragana and katakana). No kanji, no romaji.
+- You may ask clarifying questions in Japanese (e.g. わかりませんでした).
+- Do NOT reveal or explicitly mention the target vocabulary or grammar rule.
+- NEVER speak as Speaker A or put words in the student's mouth. You are ONLY Speaker B. If you cannot understand the student's input, respond as Speaker B would — ask for clarification in Japanese.
+
+YOUR SECRET TARGETS (do not reveal these to the student):
+- Your assigned word: "${aiWord.kana}" (${aiWord.english}) — you must naturally use this word during the conversation.
+- Grammar rule: "${grammarRule}" — ${grammarOwner} must naturally use this grammar pattern during the conversation.
+- The student has their own secret word to use (you don't know what it is).
+
+PHASES:
+When asked to create a scenario, provide IN ENGLISH:
+1. Who Speaker A (the student) and Speaker B (you) are
+2. The situation
+3. Any prior context (what has already been said or happened)
+4. A clear GOAL/INTENT for the student (what they need to accomplish in the conversation, e.g. "You want to find out where the nearest post office is")
+5. Who speaks first
+
+IMPORTANT: If you (Speaker B) speak first, you MUST include your opening line in kana-only Japanese at the end of the scenario description, after a blank line.
+
+IMPORTANT: The student's goal must be fully achievable using only Minna no Nihongo chapters 1-10 vocabulary and grammar. Do not create goals that would require vocabulary or grammar beyond this level.
+
+When in conversation mode, respond naturally in kana-only Japanese. Keep responses concise (1-3 sentences).
+You may add short stage directions in English in square brackets to describe non-verbal context (e.g. [points at a building across the street], [holds up a magazine], [sounds of music from the next room]). Use these only when needed for clarity.
+
+HELP TRIGGER: If the student writes "I am lost.", switch to English and:
+1. Summarize what has been said so far in the conversation
+2. Explain what Speaker B just said or asked
+3. Suggest what Speaker A could say next (without revealing target words)
+Then repeat or rephrase your last line in Japanese to get back on track.
+--- Help trigger example (for format reference only) ---
+A: I am lost.
+B: [In English] Here's what happened so far:
+- I (Speaker B) asked if you like sports.
+- You said yes and asked what sport I like.
+- I said I like soccer and asked if you want to play on Saturday.
+
+You could respond by saying whether Saturday works for you, or suggest a different day.
+
+[Back to Japanese]
+どようびは どうですか。
+--- End of help trigger example ---
+
+When you determine that both secret words have been used and the grammar rule has appeared naturally from the correct side, announce completion in English and briefly summarize what was covered.
+
+When asked for feedback, provide it in English: assess the student's grammar, vocabulary usage, and naturalness.
+
+The student may also use [square brackets] for stage directions describing actions or context (e.g. [points at the menu], [looks around]). Treat these as non-verbal context, not spoken Japanese.
+
+--- The following is a FULL EXAMPLE of a complete session for format and tone reference. Do NOT copy this scenario. Create a new, different scenario. ---
+${randomPick(EXAMPLES)}
+--- End of example ---`;
+}
+
+// ── Phase A: Generate scenario ─────────────────────────────────────
+async function startScenario() {
+  const [w1, w2] = pickTwoWords();
+  studentWord = w1;
+  aiWord = w2;
+  grammarRule = randomPick(GRAMMAR);
+  grammarSide = Math.random() < 0.5 ? "student" : "ai";
+
+  systemPrompt = buildSystemPrompt();
+  conversationHistory = [];
+
+  const phaseAMessage = "Create a conversation scenario for practice. Describe the situation, the two speakers, any prior context, the student's goal, and who goes first. Write this in English. Do not mention specific vocabulary or grammar targets.";
+
+  addSpinner();
+  try {
+    const response = await callLLM([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: phaseAMessage }
+    ]);
+    removeSpinner();
+    addMessage("assistant", response);
+
+    // Store the scenario as the first assistant message in history
+    conversationHistory.push({ role: "assistant", content: response });
+
+    phase = "B";
+    setInputEnabled(true);
+  } catch (e) {
+    removeSpinner();
+    addMessage("system-info", "Error: " + e.message);
+  }
+}
+
+// ── Phase B: Conversation turn ─────────────────────────────────────
+async function sendConversationTurn(userText) {
+  conversationHistory.push({ role: "user", content: userText });
+  addMessage("user", userText);
+
+  const taskReminder = "[SYSTEM REMINDER: Continue the conversation naturally in kana-only Japanese. Your goal: naturally incorporate your assigned word and ensure the grammar rule is used by the correct side. Once both target words have appeared and the grammar rule has been used from the correct side, announce completion in English and summarize. Do not force the targets — let them emerge naturally.]";
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    ...conversationHistory,
+    { role: "user", content: taskReminder }
+  ];
+
+  setInputEnabled(false);
+  addSpinner();
+
+  try {
+    const response = await callLLM(messages);
+    removeSpinner();
+    addMessage("assistant", response);
+    conversationHistory.push({ role: "assistant", content: response });
+
+    // Check if AI declared completion (heuristic: contains English completion markers)
+    if (response.match(/complet|well done|great job|conversation goal|targets.*covered|covered.*target|all.*target/i) && response.length > 50 && /[a-zA-Z]{10,}/.test(response)) {
+      phase = "C";
+      await requestFeedback();
+      return;
+    }
+
+    setInputEnabled(true);
+  } catch (e) {
+    removeSpinner();
+    addMessage("system-info", "Error: " + e.message);
+    setInputEnabled(true);
+  }
+}
+
+// ── Phase C: Feedback ──────────────────────────────────────────────
+async function requestFeedback() {
+  const feedbackPrompt = `Provide detailed feedback in English on the student's performance in this conversation. Assess:
+1. Grammar accuracy
+2. Vocabulary usage and naturalness
+3. How well they achieved their conversation goal
+4. Specific suggestions for improvement
+
+Also reveal: the student's target word was "${studentWord.kana}" (${studentWord.english}), your target word was "${aiWord.kana}" (${aiWord.english}), and the grammar rule was "${grammarRule}" (assigned to: ${grammarSide}).`;
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    ...conversationHistory,
+    { role: "user", content: feedbackPrompt }
+  ];
+
+  addSpinner();
+  try {
+    const response = await callLLM(messages);
+    removeSpinner();
+    addMessage("system-info", response);
+    finished = true;
+    addMessage("system-info", "Session complete. Refresh the page for a new round.");
+  } catch (e) {
+    removeSpinner();
+    addMessage("system-info", "Error getting feedback: " + e.message);
+  }
+}
+
+// ── Event handlers ─────────────────────────────────────────────────
+startBtn.addEventListener("click", () => {
+  apiKey = apiKeyInput.value.trim();
+  modelId = modelInput.value.trim();
+  if (!apiKey) { alert("Please enter your OpenRouter API key."); return; }
+  if (!modelId) { alert("Please enter a model ID."); return; }
+  cache(KEY_STORAGE, apiKey);
+  cache(MODEL_STORAGE, modelId);
+  setupDiv.style.display = "none";
+  chatContainer.style.display = "flex";
+  phase = "A";
+  startScenario();
+});
+
+sendBtn.addEventListener("click", () => {
+  const text = userInput.value.trim();
+  if (!text || finished) return;
+  userInput.value = "";
+  if (phase === "B") sendConversationTurn(text);
+});
+
+userInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendBtn.click();
+  }
+});
+</script>
+</body>
+</html>
