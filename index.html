@@ -120,14 +120,57 @@
     font-size: 0.85rem;
   }
   #new-round-btn:hover { background: #444; }
-  #token-bar {
+  #save-btn {
+    padding: 0.6rem 0.8rem;
+    background: #1a4a2e;
+    border: 1px solid #2a6a3e;
+    border-radius: 4px;
+    color: #e0e0e0;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #save-btn:hover { background: #2a5a3e; }
+  #rating-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #rating-overlay.active { display: flex; }
+  #rating-box {
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    max-width: 300px;
+  }
+  #rating-box p { margin-bottom: 1rem; }
+  .rating-stars { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 1rem; }
+  .rating-stars button {
+    background: none;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 1.2rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    cursor: pointer;
+  }
+  .rating-stars button:hover, .rating-stars button.selected { background: #e94560; border-color: #e94560; }
+  #info-bar {
+    display: flex;
+    justify-content: space-between;
     padding: 0.3rem 1rem;
     background: #0f0f1e;
     border-bottom: 1px solid #333;
     font-size: 0.75rem;
     color: #666;
-    text-align: right;
   }
+  #student-word-hint { color: #e94560; }
   #user-input:disabled { background: #2a2a2a; }
   .spinner {
     display: inline-block;
@@ -159,12 +202,30 @@
 </div>
 
 <div id="chat-container">
-  <div id="token-bar">In: <span id="tokens-in">0</span> | Out: <span id="tokens-out">0</span> | ~<span id="cost-estimate">0.000</span> EUR</div>
+  <div id="info-bar">
+    <span id="student-word-hint"></span>
+    <span id="token-bar">In: <span id="tokens-in">0</span> | Out: <span id="tokens-out">0</span> | ~<span id="cost-estimate">0.000</span> EUR</span>
+  </div>
   <div id="messages"></div>
   <div id="input-area">
     <input type="text" id="user-input" placeholder="Type in Japanese (kana)..." disabled />
     <button id="send-btn" disabled>Send</button>
     <button id="new-round-btn" title="New Round">New</button>
+    <button id="save-btn" title="Save conversation">Save</button>
+  </div>
+</div>
+
+<div id="rating-overlay">
+  <div id="rating-box">
+    <p>Rate this conversation</p>
+    <div class="rating-stars">
+      <button data-rating="1">1</button>
+      <button data-rating="2">2</button>
+      <button data-rating="3">3</button>
+      <button data-rating="4">4</button>
+      <button data-rating="5">5</button>
+    </div>
+    <button id="rating-cancel" style="background:#333;border:1px solid #555;color:#e0e0e0;padding:0.4rem 1rem;border-radius:4px;cursor:pointer;">Cancel</button>
   </div>
 </div>
 
@@ -705,6 +766,9 @@ function restoreSession() {
     messagesDiv.innerHTML = state.messages;
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
     updateTokenDisplay();
+    if (studentWord) {
+      document.getElementById("student-word-hint").textContent = 'Your word: "' + studentWord.english + '"';
+    }
 
     // Restore API key and model from localStorage
     apiKey = loadCached(KEY_STORAGE, KEY_TTL);
@@ -861,7 +925,7 @@ RULES:
 YOUR SECRET TARGETS (do not reveal these to the student):
 - Your assigned word: "${aiWord.kana}" (${aiWord.english}) — you must naturally use this word during the conversation.
 - Grammar rule: "${grammarRule}" — ${grammarOwner} must naturally use this grammar pattern during the conversation.
-- The student has their own secret word to use (you don't know what it is).
+- The student's assigned word: "${studentWord.kana}" (${studentWord.english}) — the student must naturally use this word. Do not use it yourself or hint at it directly. Design the scenario so that it can emerge naturally.
 
 PHASES:
 When asked to create a scenario, provide IN ENGLISH:
@@ -917,6 +981,7 @@ async function startScenario() {
 
   systemPrompt = buildSystemPrompt();
   conversationHistory = [];
+  document.getElementById("student-word-hint").textContent = 'Your word: "' + studentWord.english + '"';
 
   const phaseAMessage = "Create a conversation scenario for practice. Describe the situation, the two speakers, any prior context, the student's goal, and who goes first. Write this in English. Do not mention specific vocabulary or grammar targets.";
 
@@ -1035,6 +1100,57 @@ newRoundBtn.addEventListener("click", () => {
   clearSession();
   location.reload();
 });
+
+// ── Save with rating ──────────────────────────────────────────────
+const saveBtn = document.getElementById("save-btn");
+const ratingOverlay = document.getElementById("rating-overlay");
+const ratingCancel = document.getElementById("rating-cancel");
+let selectedRating = 0;
+
+document.querySelectorAll(".rating-stars button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    selectedRating = parseInt(btn.dataset.rating);
+    document.querySelectorAll(".rating-stars button").forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+    downloadConversation(selectedRating);
+    ratingOverlay.classList.remove("active");
+  });
+});
+
+ratingCancel.addEventListener("click", () => {
+  ratingOverlay.classList.remove("active");
+});
+
+saveBtn.addEventListener("click", () => {
+  if (conversationHistory.length === 0) return;
+  selectedRating = 0;
+  document.querySelectorAll(".rating-stars button").forEach(b => b.classList.remove("selected"));
+  ratingOverlay.classList.add("active");
+});
+
+function downloadConversation(rating) {
+  const data = {
+    timestamp: new Date().toISOString(),
+    model: modelId,
+    rating: rating,
+    targets: {
+      studentWord: studentWord,
+      aiWord: aiWord,
+      grammarRule: grammarRule,
+      grammarSide: grammarSide
+    },
+    tokens: { in: tokensIn, out: tokensOut },
+    systemPrompt: systemPrompt,
+    conversationHistory: conversationHistory
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "jp_sparring_" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + "_r" + rating + ".json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 userInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
