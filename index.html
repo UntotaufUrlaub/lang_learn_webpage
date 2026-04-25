@@ -110,6 +110,24 @@
   }
   #send-btn:hover { background: #c73650; }
   #send-btn:disabled { background: #555; cursor: not-allowed; }
+  #new-round-btn {
+    padding: 0.6rem 0.8rem;
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #e0e0e0;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #new-round-btn:hover { background: #444; }
+  #token-bar {
+    padding: 0.3rem 1rem;
+    background: #0f0f1e;
+    border-bottom: 1px solid #333;
+    font-size: 0.75rem;
+    color: #666;
+    text-align: right;
+  }
   #user-input:disabled { background: #2a2a2a; }
   .spinner {
     display: inline-block;
@@ -141,10 +159,12 @@
 </div>
 
 <div id="chat-container">
+  <div id="token-bar">In: <span id="tokens-in">0</span> | Out: <span id="tokens-out">0</span> | ~<span id="cost-estimate">0.000</span> EUR</div>
   <div id="messages"></div>
   <div id="input-area">
     <input type="text" id="user-input" placeholder="Type in Japanese (kana)..." disabled />
     <button id="send-btn" disabled>Send</button>
+    <button id="new-round-btn" title="New Round">New</button>
   </div>
 </div>
 
@@ -644,6 +664,62 @@ let aiWord = null;
 let grammarRule = null;
 let grammarSide = ""; // "student" or "ai"
 let finished = false;
+let tokensIn = 0;
+let tokensOut = 0;
+
+// ── Session state persistence (survives mobile tab eviction) ───────
+const SESSION_KEY = "jp_sparring_session";
+
+function saveSession() {
+  const state = {
+    conversationHistory,
+    systemPrompt,
+    phase,
+    studentWord,
+    aiWord,
+    grammarRule,
+    grammarSide,
+    finished,
+    tokensIn,
+    tokensOut,
+    messages: messagesDiv.innerHTML
+  };
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(state));
+}
+
+function restoreSession() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return false;
+    const state = JSON.parse(raw);
+    conversationHistory = state.conversationHistory;
+    systemPrompt = state.systemPrompt;
+    phase = state.phase;
+    studentWord = state.studentWord;
+    aiWord = state.aiWord;
+    grammarRule = state.grammarRule;
+    grammarSide = state.grammarSide;
+    finished = state.finished;
+    tokensIn = state.tokensIn || 0;
+    tokensOut = state.tokensOut || 0;
+    messagesDiv.innerHTML = state.messages;
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    updateTokenDisplay();
+
+    // Restore API key and model from localStorage
+    apiKey = loadCached(KEY_STORAGE, KEY_TTL);
+    modelId = loadCached(MODEL_STORAGE, MODEL_TTL) || "google/gemini-2.5-flash-preview";
+
+    setupDiv.style.display = "none";
+    chatContainer.style.display = "flex";
+    if (!finished && phase === "B") setInputEnabled(true);
+    return true;
+  } catch { return false; }
+}
+
+function clearSession() {
+  sessionStorage.removeItem(SESSION_KEY);
+}
 
 // ── Helpers ────────────────────────────────────────────────────────
 function randomPick(arr) {
@@ -691,9 +767,26 @@ const apiKeyInput = document.getElementById("api-key");
 const modelInput = document.getElementById("model-id");
 const startBtn = document.getElementById("start-btn");
 
+const newRoundBtn = document.getElementById("new-round-btn");
+const tokensInEl = document.getElementById("tokens-in");
+const tokensOutEl = document.getElementById("tokens-out");
+const costEl = document.getElementById("cost-estimate");
+
+function updateTokenDisplay() {
+  tokensInEl.textContent = tokensIn;
+  tokensOutEl.textContent = tokensOut;
+  const cost = (tokensIn / 1e6) * 2.5 + (tokensOut / 1e6) * 25;
+  costEl.textContent = cost.toFixed(4);
+}
+
 // Prefill cached values
 apiKeyInput.value = loadCached(KEY_STORAGE, KEY_TTL);
 modelInput.value = loadCached(MODEL_STORAGE, MODEL_TTL) || "google/gemini-2.5-flash-preview";
+
+// Try to restore a previous session (survives mobile tab eviction)
+if (!restoreSession()) {
+  // No session to restore — show setup screen (default)
+}
 
 // ── UI helpers ─────────────────────────────────────────────────────
 function addMessage(role, text) {
@@ -742,6 +835,11 @@ async function callLLM(messages) {
     throw new Error("OpenRouter error " + resp.status + ": " + err);
   }
   const data = await resp.json();
+  if (data.usage) {
+    tokensIn += data.usage.prompt_tokens || 0;
+    tokensOut += data.usage.completion_tokens || 0;
+    updateTokenDisplay();
+  }
   return data.choices[0].message.content;
 }
 
@@ -835,6 +933,7 @@ async function startScenario() {
     conversationHistory.push({ role: "assistant", content: response });
 
     phase = "B";
+    saveSession();
     setInputEnabled(true);
   } catch (e) {
     removeSpinner();
@@ -863,6 +962,8 @@ async function sendConversationTurn(userText) {
     removeSpinner();
     addMessage("assistant", response);
     conversationHistory.push({ role: "assistant", content: response });
+
+    saveSession();
 
     // Check if AI declared completion (heuristic: contains English completion markers)
     if (response.match(/complet|well done|great job|conversation goal|targets.*covered|covered.*target|all.*target/i) && response.length > 50 && /[a-zA-Z]{10,}/.test(response)) {
@@ -901,7 +1002,8 @@ Also reveal: the student's target word was "${studentWord.kana}" (${studentWord.
     removeSpinner();
     addMessage("system-info", response);
     finished = true;
-    addMessage("system-info", "Session complete. Refresh the page for a new round.");
+    addMessage("system-info", "Session complete. Press 'New' for a new round.");
+    saveSession();
   } catch (e) {
     removeSpinner();
     addMessage("system-info", "Error getting feedback: " + e.message);
@@ -927,6 +1029,11 @@ sendBtn.addEventListener("click", () => {
   if (!text || finished) return;
   userInput.value = "";
   if (phase === "B") sendConversationTurn(text);
+});
+
+newRoundBtn.addEventListener("click", () => {
+  clearSession();
+  location.reload();
 });
 
 userInput.addEventListener("keydown", (e) => {
