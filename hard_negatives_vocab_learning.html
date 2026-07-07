@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日本語 Quiz</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0d0d1a;
+  --surface:   #16162a;
+  --surface2:  #1e1e38;
+  --accent:    #6c63ff;
+  --accent-lo: rgba(108,99,255,0.15);
+  --accent-gl: rgba(108,99,255,0.4);
+  --success:   #22c55e;
+  --error:     #ef4444;
+  --warn:      #f59e0b;
+  --text:      #e2e2f0;
+  --dim:       #6666aa;
+  --border:    #2a2a4a;
+  --matched-bg:#0f2010;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* ── screens ── */
+.screen { display: none; width: 100%; max-width: 580px; flex-direction: column; gap: 18px; }
+.screen.active { display: flex; }
+#screen-quiz { max-width: 680px; }
+
+/* ── typography ── */
+h1 { font-size: 1.65rem; font-weight: 300; letter-spacing: -0.01em; }
+h1 em { font-style: normal; color: var(--accent); }
+.label {
+  font-size: 0.72rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--dim); margin-bottom: 6px;
+}
+
+/* ── upload ── */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 16px;
+  padding: 52px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  user-select: none;
+}
+.drop-zone:hover, .drop-zone.over {
+  border-color: var(--accent);
+  background: var(--accent-lo);
+}
+.drop-icon { font-size: 2.6rem; margin-bottom: 14px; }
+.drop-zone h2 { font-size: 1rem; font-weight: 500; }
+.drop-zone p { margin-top: 6px; color: var(--dim); font-size: 0.875rem; }
+
+/* ── forms ── */
+select, input[type="range"] {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 9px 12px;
+  outline: none;
+  cursor: pointer;
+}
+select:focus { border-color: var(--accent); }
+input[type="range"] {
+  padding: 0; border: none; background: transparent;
+  accent-color: var(--accent); flex: 1;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.field-label { font-size: 0.82rem; color: var(--dim); }
+
+.preview-box {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-height: 90px;
+}
+.prev-jp { font-family: 'Noto Sans JP', sans-serif; font-size: 1.45rem; margin-bottom: 3px; }
+.prev-rd { font-family: 'Noto Sans JP', sans-serif; font-size: 0.88rem; color: var(--dim); margin-bottom: 3px; }
+.prev-mn { font-size: 0.88rem; }
+.prev-meta { font-size: 0.72rem; color: var(--dim); margin-top: 10px; }
+
+.temp-row { display: flex; align-items: center; gap: 10px; }
+.temp-val { font-size: 0.88rem; font-weight: 600; color: var(--accent); min-width: 28px; text-align: right; }
+.temp-ends { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--dim); margin-top: 3px; }
+.sublabel { font-size: 0.72rem; color: var(--dim); margin-bottom: 5px; }
+.tag-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.tag-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-chip {
+  display: inline-flex; align-items: center;
+  background: var(--accent-lo); border: 1px solid var(--accent);
+  border-radius: 20px; padding: 4px 11px;
+  font-size: 0.75rem; cursor: pointer; user-select: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.tag-chip.off { background: transparent; border-color: var(--border); color: var(--dim); }
+.toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 0.9rem; }
+.tog { position: relative; width: 40px; height: 22px; cursor: pointer; flex-shrink: 0; }
+.tog input { opacity: 0; width: 0; height: 0; position: absolute; }
+.tog-track { position: absolute; inset: 0; background: var(--border); border-radius: 22px; transition: background 0.2s; }
+.tog-track::after { content: ''; position: absolute; width: 16px; height: 16px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: transform 0.2s; }
+.tog input:checked + .tog-track { background: var(--accent); }
+.tog input:checked + .tog-track::after { transform: translateX(18px); }
+
+/* ── buttons ── */
+.btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.btn:hover { filter: brightness(1.15); }
+.btn.ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--dim);
+}
+.btn.ghost:hover { border-color: var(--dim); color: var(--text); filter: none; }
+
+/* ── error / loading ── */
+.error-box {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid var(--error);
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 0.875rem;
+  color: var(--error);
+  white-space: pre-line;
+}
+.loading-msg { color: var(--dim); font-size: 0.88rem; text-align: center; padding: 10px; }
+
+/* ── quiz header ── */
+.quiz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.badge {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.score-badge { font-size: 1rem; font-weight: 600; color: var(--accent); }
+
+/* ── tap counter ── */
+.tap-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 18px;
+  gap: 14px;
+}
+.tap-label { font-size: 0.75rem; color: var(--dim); white-space: nowrap; }
+.tap-dots { display: flex; gap: 7px; }
+.dot {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.dot.on { background: var(--accent); box-shadow: 0 0 7px var(--accent-gl); }
+.mult-badge {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--warn);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+/* ── match grid ── */
+.match-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.match-col { display: flex; flex-direction: column; gap: 8px; }
+
+.card-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 14px 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.88rem;
+  white-space: pre-line;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s, opacity 0.2s;
+  text-align: center;
+  line-height: 1.45;
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  word-break: break-word;
+}
+.card-btn.jp { font-family: 'Noto Sans JP', sans-serif; font-size: 1.25rem; }
+.card-btn:hover:not(:disabled):not(.matched) {
+  border-color: var(--accent);
+  background: var(--accent-lo);
+}
+.card-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-lo);
+  box-shadow: 0 0 0 2px var(--accent-gl);
+}
+.card-btn.matched {
+  background: var(--matched-bg);
+  border-color: var(--success);
+  color: var(--success);
+  opacity: 0.55;
+  cursor: default;
+}
+.card-btn.wrong {
+  border-color: var(--error);
+  background: rgba(239,68,68,0.12);
+  animation: shake 0.32s ease;
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  25%      { transform: translateX(-5px); }
+  75%      { transform: translateX(5px); }
+}
+
+/* ── result ── */
+.result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 44px 24px;
+  text-align: center;
+}
+.result-score { font-size: 4rem; font-weight: 700; color: var(--accent); line-height: 1; }
+.result-max { font-size: 0.9rem; color: var(--dim); margin-top: 8px; }
+.result-grade { font-size: 1.1rem; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ UPLOAD ════════════════════ -->
+<div id="screen-upload" class="screen active">
+  <h1><em>日本語</em> Quiz</h1>
+
+  <div class="drop-zone" id="drop-zone">
+    <div class="drop-icon">📦</div>
+    <h2>Drop your .apkg file here</h2>
+    <p>or click to browse · export from Anki via File → Export</p>
+    <input type="file" id="file-input" accept=".apkg" style="display:none">
+  </div>
+
+  <div id="upload-error" class="error-box" style="display:none"></div>
+  <div id="upload-loading" class="loading-msg" style="display:none">Loading…</div>
+</div>
+
+<!-- ════════════════════ CONFIG ════════════════════ -->
+<div id="screen-config" class="screen">
+  <h1><em>日本語</em> Quiz</h1>
+
+  <div>
+    <div class="label">Deck</div>
+    <select id="deck-select"></select>
+  </div>
+
+  <div>
+    <div class="label">Field Mapping</div>
+    <div class="sublabel">Note Type</div>
+    <select id="notetype-select"></select>
+    <div id="field-selects" style="margin-top:10px"></div>
+  </div>
+
+  <div>
+    <div class="label">Card Preview</div>
+    <div class="preview-box" id="field-preview">Load a deck to preview…</div>
+  </div>
+
+  <div>
+    <div class="label">Card Filters</div>
+    <div class="toggle-row">
+      <span>Include suspended cards</span>
+      <label class="tog">
+        <input type="checkbox" id="include-suspended">
+        <span class="tog-track"></span>
+      </label>
+    </div>
+  </div>
+
+  <div id="tag-section" style="display:none">
+    <div class="label">Tags <span id="tag-summary" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);font-size:0.78rem"></span></div>
+    <div class="tag-row">
+      <button class="btn ghost" id="tag-all-btn" style="padding:4px 10px;font-size:0.78rem">All</button>
+      <button class="btn ghost" id="tag-none-btn" style="padding:4px 10px;font-size:0.78rem">None</button>
+    </div>
+    <div class="tag-chips" id="tag-chips"></div>
+  </div>
+
+  <div>
+    <div class="label">Sampling Temperature</div>
+    <div class="temp-row">
+      <span style="font-size:0.85rem">🔥</span>
+      <input type="range" id="temp-slider" min="0.2" max="3" step="0.1" value="1">
+      <span style="font-size:0.85rem">🎲</span>
+      <span class="temp-val" id="temp-val">1.0</span>
+    </div>
+    <div class="temp-ends">
+      <span>Hard cards only</span>
+      <span>Uniform random</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="label">Distractor Similarity</div>
+    <div class="temp-row">
+      <span style="font-size:0.85rem">🎯</span>
+      <input type="range" id="dsim-slider" min="0.1" max="3" step="0.1" value="1">
+      <span style="font-size:0.85rem">🎲</span>
+      <span class="temp-val" id="dsim-val">1.0</span>
+    </div>
+    <div class="temp-ends">
+      <span>Similar only (more pts)</span>
+      <span>Uniform random</span>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px">
+    <button class="btn ghost" id="save-config-btn">Save config</button>
+    <button class="btn ghost" id="load-config-btn">Load config</button>
+  </div>
+
+  <button class="btn" id="start-btn">Start Round →</button>
+  <button class="btn ghost" id="back-btn">← Upload different file</button>
+</div>
+
+<!-- ════════════════════ QUIZ ════════════════════ -->
+<div id="screen-quiz" class="screen">
+  <div class="quiz-header">
+    <span class="badge" id="set-counter">1 / 10</span>
+    <span class="badge score-badge" id="round-score">0 pts</span>
+    <button class="btn ghost" id="quit-btn" style="padding:5px 14px;font-size:0.8rem">Quit</button>
+  </div>
+
+  <div class="tap-bar">
+    <span class="tap-label">Tap value</span>
+    <div class="tap-dots">
+      <div class="dot on" id="dot-3"></div>
+      <div class="dot on" id="dot-2"></div>
+      <div class="dot on" id="dot-1"></div>
+      <div class="dot on" id="dot-0"></div>
+    </div>
+    <span class="mult-badge" id="multiplier">×1.0</span>
+  </div>
+
+  <div class="match-grid">
+    <div class="match-col" id="left-col"></div>
+    <div class="match-col" id="right-col"></div>
+  </div>
+</div>
+
+<!-- ════════════════════ RESULT ════════════════════ -->
+<div id="screen-result" class="screen">
+  <h1>Round Complete</h1>
+  <div class="result-card">
+    <div class="result-score" id="final-score">0</div>
+    <div class="result-max" id="result-max">pts · theoretical max 2000</div>
+    <div class="result-grade" id="result-grade"></div>
+  </div>
+  <button class="btn" id="new-round-btn">Play Again →</button>
+  <button class="btn ghost" id="config-btn">← Settings</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let SQL = null, db = null;
+let rawRows = [], allCards = [];
+let deckMap = {}, models = {}, noteTypeMaps = {}, noteTypeNames = {};
+let selectedMid = '';
+let allTags = [], selectedTags = new Set();
+let _deckLoading = false; // suppress spurious change events during deck load
+const STORAGE_KEY = 'jap-quiz-config';
+const settings = { temperature: 1.0, distractorTemp: 1.0, includeSuspended: false };
+
+const SETS_PER_ROUND = 10;
+let roundSetIdx = 0, roundScore = 0;
+let setCards = [], setMult = 1, tapCounter = 4;
+let selLeft = null, selRight = null;
+let matchedIds = new Set();
+
+// ═══════════════════════════════════════════
+// SCREEN
+// ═══════════════════════════════════════════
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+// ═══════════════════════════════════════════
+// APKG LOADING
+// ═══════════════════════════════════════════
+function dbTables() {
+  const r = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
+  return r.length ? r[0].values.map(v => v[0]) : [];
+}
+
+async function loadApkg(file) {
+  const errEl  = document.getElementById('upload-error');
+  const loadEl = document.getElementById('upload-loading');
+  errEl.style.display  = 'none';
+  loadEl.style.display = '';
+
+  try {
+    loadEl.textContent = 'Extracting archive…';
+    const zip    = await JSZip.loadAsync(file);
+    // Try each format in order; .anki21b (Anki 23+) is not standard SQLite — skip it
+    // if sql.js rejects it and fall through to the older compatible files.
+    const candidates = ['collection.anki21b', 'collection.anki21', 'collection.anki2'];
+    let opened = null;
+    for (const name of candidates) {
+      const f = zip.file(name);
+      if (!f) continue;
+      loadEl.textContent = `Reading ${name}…`;
+      const bytes = new Uint8Array(await f.async('arraybuffer'));
+      try {
+        const candidate = new SQL.Database(bytes);
+        candidate.exec('SELECT 1 FROM sqlite_master LIMIT 1'); // verify readable
+        opened = candidate;
+        break;
+      } catch (_) { /* not a readable SQLite file, try next */ }
+    }
+    if (!opened) throw new Error(
+      'Could not open any collection file in this .apkg.\n' +
+      'Re-export from Anki with "Support older Anki versions" checked.'
+    );
+    if (db) db.close();
+    db = opened;
+
+    // Detect the compatibility stub Anki puts in .anki21 when .anki21b is the real data
+    const stub = db.exec('SELECT flds FROM notes LIMIT 1');
+    if (stub.length && stub[0].values[0][0].startsWith('Please update')) {
+      throw new Error(
+        'Your Anki uses a newer export format that this app cannot read directly.\n\n' +
+        'Fix: In Anki → File → Export → tick "Support older Anki versions" → Export.\n' +
+        'Then upload that file here.'
+      );
+    }
+
+    const tables = dbTables();
+
+    // ── Decks ──
+    deckMap = {};
+    // New schema (Anki 2.1.55+): dedicated decks table
+    if (tables.includes('decks')) {
+      const r = db.exec('SELECT id, name FROM decks');
+      if (r.length) for (const [id, name] of r[0].values) deckMap[String(id)] = name;
+    }
+    // Old schema fallback: col.decks JSON
+    if (!Object.keys(deckMap).length) {
+      const col = db.exec('SELECT decks FROM col LIMIT 1');
+      if (col.length) {
+        for (const [id, d] of Object.entries(JSON.parse(col[0].values[0][0])))
+          deckMap[id] = d.name;
+      }
+    }
+    if (!Object.keys(deckMap).length) throw new Error('No decks found in this file.');
+
+    // ── Note type field names ──
+    models = {}; noteTypeNames = {};
+    // New schema: notetypes + fields tables
+    if (tables.includes('fields')) {
+      const nr = db.exec('SELECT id, name FROM notetypes');
+      if (nr.length) for (const [id, name] of nr[0].values) noteTypeNames[String(id)] = name;
+      const fr = db.exec('SELECT ntid, ord, name FROM fields ORDER BY ntid, ord');
+      if (fr.length) {
+        for (const [ntid, ord, name] of fr[0].values) {
+          const k = String(ntid);
+          if (!models[k]) models[k] = { flds: [] };
+          models[k].flds[ord] = { name };
+        }
+      }
+    }
+    // Old schema fallback: col.models JSON
+    if (!Object.keys(models).length) {
+      const col = db.exec('SELECT models FROM col LIMIT 1');
+      if (col.length) {
+        models = JSON.parse(col[0].values[0][0]);
+        for (const [id, m] of Object.entries(models)) noteTypeNames[id] = m.name;
+      }
+    }
+
+    loadEl.style.display = 'none';
+    populateDeckSelect();
+    show('config');
+
+  } catch (e) {
+    loadEl.style.display = 'none';
+    errEl.textContent    = e.message;
+    errEl.style.display  = '';
+  }
+}
+
+function populateDeckSelect() {
+  const sel = document.getElementById('deck-select');
+  sel.innerHTML = '';
+  for (const [id, name] of Object.entries(deckMap)) {
+    const o = document.createElement('option');
+    o.value = id; o.textContent = name;
+    sel.appendChild(o);
+  }
+  // Restore previously selected deck if it still exists in this file
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (saved && saved.deckId && deckMap[saved.deckId]) sel.value = saved.deckId;
+  } catch(_) {}
+  loadDeck(sel.value);
+}
+
+// ═══════════════════════════════════════════
+// DECK / FIELD CONFIG
+// ═══════════════════════════════════════════
+function loadDeck(deckId) {
+  _deckLoading = true;
+  try {
+    _loadDeckInner(deckId);
+  } finally {
+    _deckLoading = false;
+  }
+}
+
+function _loadDeckInner(deckId) {
+  // Include child decks (e.g. "Japanese::N3" when parent "Japanese" selected)
+  const parentName = deckMap[deckId] || '';
+  const deckIds = Object.entries(deckMap)
+    .filter(([, name]) => name === parentName || name.startsWith(parentName + '::'))
+    .map(([id]) => id);
+  const inClause = deckIds.length ? deckIds.join(',') : deckId;
+
+  const res = db.exec(`
+    SELECT c.id, c.type, c.factor, c.lapses, c.ivl, n.flds, n.tags, n.mid, c.queue
+    FROM cards c JOIN notes n ON c.nid = n.id
+    WHERE c.did IN (${inClause})
+  `);
+
+  if (!res.length || !res[0].values.length) {
+    document.getElementById('field-preview').innerHTML =
+      `<span style="color:var(--dim)">No cards found in this deck (searched deck IDs: ${inClause}).<br>Try a different deck.</span>`;
+    // Clear stale note type select and field selects on empty result
+    document.getElementById('notetype-select').innerHTML = '';
+    document.getElementById('field-selects').innerHTML = '';
+    allCards = []; return;
+  }
+
+  rawRows = res[0].values;
+
+  // Count cards per note type
+  const cnt = {};
+  for (const r of rawRows) cnt[String(r[7])] = (cnt[String(r[7])] || 0) + 1;
+
+  // Build per-note-type field index maps for every note type present in the deck
+  noteTypeMaps = {};
+  for (const mid of Object.keys(cnt)) {
+    const model = models[mid];
+    // filter(Boolean) removes holes from sparse arrays (gaps in ord values)
+    const rawFlds = model && model.flds ? model.flds : [];
+    const names   = rawFlds.filter(Boolean).map(f => f.name);
+    const max     = Math.max(0, names.length - 1);
+    noteTypeMaps[mid] = {
+      names,
+      ja:      autoField(names, ['expression','word','vocab','japanese','front','kanji','表現','言葉','target'], 0),
+      reading: autoField(names, ['reading','kana','furigana','yomi','pronunciation','読み'], Math.min(1, max)),
+      meaning: autoField(names, ['meaning','definition','english','translation','back','意味','gloss'], Math.min(2, max)),
+    };
+  }
+
+  // Default selection: most common note type
+  selectedMid = Object.entries(cnt).sort((a,b) => b[1]-a[1])[0][0];
+
+  // Populate note type dropdown
+  const ntSel = document.getElementById('notetype-select');
+  ntSel.innerHTML = '';
+  for (const [mid, count] of Object.entries(cnt).sort((a,b) => b[1]-a[1])) {
+    const o = document.createElement('option');
+    o.value = mid;
+    o.textContent = `${noteTypeNames[mid] || 'Note type ' + mid} (${count})`;
+    ntSel.appendChild(o);
+  }
+  ntSel.value = selectedMid; // explicitly sync displayed value
+
+  rebuildCards();
+  buildTagList();
+  buildFieldSelects();
+  refreshPreview();
+}
+
+// ═══════════════════════════════════════════
+// TAG FILTER
+// ═══════════════════════════════════════════
+function buildTagList() {
+  const tagSet = new Set();
+  for (const card of allCards)
+    for (const t of card.tags.trim().split(/\s+/).filter(Boolean)) tagSet.add(t);
+  allTags = [...tagSet].sort();
+  selectedTags = new Set(allTags);
+
+  document.getElementById('tag-section').style.display = allTags.length ? '' : 'none';
+  renderTagChips();
+}
+
+function renderTagChips() {
+  const container = document.getElementById('tag-chips');
+  container.innerHTML = '';
+  for (const tag of allTags) {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip' + (selectedTags.has(tag) ? '' : ' off');
+    chip.textContent = tag;
+    chip.addEventListener('click', () => {
+      if (selectedTags.has(tag)) selectedTags.delete(tag);
+      else selectedTags.add(tag);
+      chip.classList.toggle('off', !selectedTags.has(tag));
+      updateTagSummary();
+    });
+    container.appendChild(chip);
+  }
+  updateTagSummary();
+}
+
+function updateTagSummary() {
+  const active = getActiveCards();
+  const el = document.getElementById('tag-summary');
+  el.textContent = selectedTags.size === allTags.length
+    ? `· ${active.length} cards`
+    : `· ${selectedTags.size} / ${allTags.length} tags · ${active.length} cards`;
+}
+
+function getActiveCards() {
+  let cards = settings.includeSuspended ? allCards : allCards.filter(c => c.queue !== -1);
+  if (!allTags.length || selectedTags.size === allTags.length) return cards;
+  return cards.filter(card => {
+    const tags = card.tags.trim().split(/\s+/).filter(Boolean);
+    return !tags.length || tags.some(t => selectedTags.has(t));
+  });
+}
+
+// ═══════════════════════════════════════════
+// PERSIST CONFIG
+// ═══════════════════════════════════════════
+function saveConfig() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      deckId:           document.getElementById('deck-select').value,
+      temperature:      settings.temperature,
+      distractorTemp:   settings.distractorTemp,
+      includeSuspended: settings.includeSuspended,
+      tags:             [...selectedTags],
+      fields: Object.fromEntries(
+        Object.entries(noteTypeMaps).map(([mid, m]) => [mid, { ja: m.ja, reading: m.reading, meaning: m.meaning }])
+      ),
+    }));
+    const btn = document.getElementById('save-config-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Saved ✓';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  } catch(_) {}
+}
+
+function loadConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (!saved) return;
+
+    if (saved.temperature != null) {
+      settings.temperature = saved.temperature;
+      document.getElementById('temp-slider').value = settings.temperature;
+      document.getElementById('temp-val').textContent = settings.temperature.toFixed(1);
+    }
+    if (saved.distractorTemp != null) {
+      settings.distractorTemp = saved.distractorTemp;
+      document.getElementById('dsim-slider').value = settings.distractorTemp;
+      document.getElementById('dsim-val').textContent = settings.distractorTemp.toFixed(1);
+    }
+    if (saved.includeSuspended != null) {
+      settings.includeSuspended = saved.includeSuspended;
+      document.getElementById('include-suspended').checked = settings.includeSuspended;
+    }
+    if (saved.fields) {
+      for (const [mid, ov] of Object.entries(saved.fields)) {
+        if (!noteTypeMaps[mid]) continue;
+        if (ov.ja      != null) noteTypeMaps[mid].ja      = ov.ja;
+        if (ov.reading != null) noteTypeMaps[mid].reading = ov.reading;
+        if (ov.meaning != null) noteTypeMaps[mid].meaning = ov.meaning;
+      }
+    }
+    if (Array.isArray(saved.tags)) {
+      const valid = saved.tags.filter(t => allTags.includes(t));
+      selectedTags = valid.length ? new Set(valid) : new Set(allTags);
+    }
+    rebuildCards();
+    renderTagChips();
+    buildFieldSelects();
+    refreshPreview();
+  } catch(_) {}
+}
+
+function autoField(names, keywords, fallback) {
+  for (let i = 0; i < names.length; i++) {
+    if (!names[i]) continue;
+    if (keywords.some(k => names[i].toLowerCase().includes(k))) return i;
+  }
+  return fallback;
+}
+
+function rebuildCards() {
+  allCards = rawRows.map(([id, type, factor, lapses, ivl, flds, tags, mid, queue]) => {
+    const map = noteTypeMaps[String(mid)] || { ja: 0, reading: 1, meaning: 2 };
+    const f   = flds.split('\x1f');
+    const jp  = f[map.ja]      || '';
+    const rd  = f[map.reading] || '';
+    const mn  = f[map.meaning] || '';
+    if (!jp || !mn) return null;
+    return {
+      id: String(id), japanese: jp, reading: rd, meaning: mn,
+      tags: tags || '', queue: queue ?? 0,
+      type, factor: factor||0, lapses: lapses||0,
+      diff: calcDiff(type, factor, lapses, ivl),
+      _kana: extractKana(jp + rd),
+    };
+  }).filter(Boolean);
+}
+
+function buildFieldSelects() {
+  const map    = noteTypeMaps[selectedMid] || { names: [], ja: 0, reading: 1, meaning: 2 };
+  const names  = map.names;
+  const el     = document.getElementById('field-selects');
+  el.innerHTML = '';
+  [['ja','Japanese'],['reading','Reading'],['meaning','Meaning']].forEach(([key, label]) => {
+    const row = document.createElement('div');
+    row.className = 'field-row';
+    const lbl = document.createElement('span');
+    lbl.className = 'field-label'; lbl.textContent = label;
+    const sel = document.createElement('select');
+    names.forEach((name, i) => {
+      const o = document.createElement('option');
+      o.value = i; o.textContent = `[${i}] ${name}`;
+      if (i === map[key]) o.selected = true;
+      sel.appendChild(o);
+    });
+    if (!names.length) {
+      const o = document.createElement('option');
+      o.textContent = 'No fields detected'; sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => {
+      noteTypeMaps[selectedMid][key] = +sel.value;
+      rebuildCards(); refreshPreview();
+    });
+    row.append(lbl, sel);
+    el.appendChild(row);
+  });
+}
+
+function refreshPreview() {
+  const el  = document.getElementById('field-preview');
+  const map = noteTypeMaps[selectedMid] || { names: [], ja: 0, reading: 1, meaning: 2 };
+  // Find a raw row for the selected note type
+  const raw = rawRows.find(r => String(r[7]) === selectedMid);
+  const fields = raw ? raw[5].split('\x1f') : [];
+
+  // Count valid cards for this note type
+  const typeCardCount = allCards.filter(c => {
+    const r = rawRows.find(rr => String(rr[0]) === c.id);
+    return r && String(r[7]) === selectedMid;
+  }).length;
+
+  if (!fields.length || (!fields[map.ja] && !fields[map.meaning])) {
+    const dump = fields.map((v,i) =>
+      `<div style="margin-bottom:4px"><span style="color:var(--dim)">[${i}]</span> ${plain(v).slice(0,60) || '<em style="color:var(--dim)">empty</em>'}</div>`
+    ).join('');
+    el.innerHTML = `
+      <div style="color:var(--error);margin-bottom:8px">No valid cards for this note type — adjust the field mapping.</div>
+      <div style="font-size:0.78rem;color:var(--dim);margin-bottom:5px">Available fields:</div>
+      <div style="font-size:0.82rem">${dump || 'No field data.'}</div>`;
+    return;
+  }
+
+  const n = map.names;
+  el.innerHTML = `
+    <div class="prev-jp">${safeJp(fields[map.ja] || '')}</div>
+    <div class="prev-rd">${plain(fields[map.reading] || '')}</div>
+    <div class="prev-mn">${plain(fields[map.meaning] || '')}</div>
+    <div class="prev-meta">${typeCardCount} cards · ${n[map.ja]||'['+map.ja+']'} / ${n[map.reading]||'['+map.reading+']'} / ${n[map.meaning]||'['+map.meaning+']'}</div>
+  `;
+}
+
+// ═══════════════════════════════════════════
+// DIFFICULTY
+// ═══════════════════════════════════════════
+function calcDiff(type, factor, lapses) {
+  if (type === 0) return 0.35; // new
+  if (type === 1) return 0.65; // learning
+  if (type === 3) return 0.85; // relearning
+  // review: factor 1300(hard)→2500(default)→4000+(easy)
+  const fScore = Math.max(0, Math.min(1, (2500 - (factor||2500)) / 1200 * 0.5 + 0.5));
+  const lScore = Math.min(1, (lapses||0) / 8);
+  return fScore * 0.6 + lScore * 0.4;
+}
+
+// ═══════════════════════════════════════════
+// SAMPLING
+// ═══════════════════════════════════════════
+function weightedPick(cards, temperature) {
+  const exp = 1 / Math.max(temperature, 0.05);
+  const w   = cards.map(c => Math.pow(Math.max(c.diff, 0.001), exp));
+  const tot = w.reduce((a,b) => a+b, 0);
+  let r = Math.random() * tot;
+  for (let i = 0; i < cards.length; i++) { r -= w[i]; if (r <= 0) return cards[i]; }
+  return cards[cards.length-1];
+}
+
+// ═══════════════════════════════════════════
+// TEXT / KANA UTILS
+// ═══════════════════════════════════════════
+function plain(html) {
+  return (html||'').replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ').replace(/&[a-z#0-9]+;/gi,'').trim();
+}
+
+function plainWithBreaks(html) {
+  return (html||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ').replace(/&[a-z#0-9]+;/gi,'').trim();
+}
+
+// Allow <ruby><rt><rb><rp><br> for furigana and line breaks; strip everything else
+function safeJp(html) {
+  return (html||'').replace(/<(?!\/?(?:ruby|rt|rb|rp|br)\b)[^>]+>/gi,'').trim();
+}
+
+function extractKana(s) {
+  // katakana → hiragana, then keep only hiragana
+  return plain(s)
+    .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0)-0x60))
+    .replace(/[^぀-ゟ]/g,'');
+}
+
+function lev(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = [...Array(b.length+1).keys()];
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++)
+      cur[j] = a[i-1]===b[j-1] ? prev[j-1] : 1 + Math.min(prev[j], cur[j-1], prev[j-1]);
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+// ═══════════════════════════════════════════
+// SET BUILDER
+// ═══════════════════════════════════════════
+function buildSet() {
+  const active = getActiveCards();
+  const anchor = weightedPick(active, settings.temperature);
+
+  // Sample 3 distractors weighted by kana similarity (close = more likely)
+  const usedMn = new Set([plain(anchor.meaning).toLowerCase()]);
+  const dExp = 1 / Math.max(settings.distractorTemp, 0.05);
+  let pool = active
+    .filter(c => c.id !== anchor.id)
+    .map(c => ({ c, w: Math.pow(1 / (1 + lev(anchor._kana, c._kana)), dExp) }));
+
+  const distractors = [];
+  while (distractors.length < 3 && pool.length) {
+    const tot = pool.reduce((s, x) => s + x.w, 0);
+    let r = Math.random() * tot;
+    let idx = pool.length - 1;
+    for (let i = 0; i < pool.length; i++) { r -= pool[i].w; if (r <= 0) { idx = i; break; } }
+    const picked = pool.splice(idx, 1)[0];
+    const m = plain(picked.c.meaning).toLowerCase();
+    if (!usedMn.has(m)) { distractors.push(picked.c); usedMn.add(m); }
+  }
+
+  const cards = [anchor, ...distractors.slice(0,3)];
+
+  // Avg pairwise kana distance → confusion multiplier
+  let sumD = 0, pairs = 0;
+  for (let i = 0; i < cards.length; i++)
+    for (let j = i+1; j < cards.length; j++) {
+      sumD += lev(cards[i]._kana, cards[j]._kana);
+      pairs++;
+    }
+  const avgD = pairs ? sumD/pairs : 10;
+  const mult = 1 + 19 / (1 + avgD); // range [1, 20]
+
+  return { cards, mult };
+}
+
+// ═══════════════════════════════════════════
+// QUIZ FLOW
+// ═══════════════════════════════════════════
+function startRound() {
+  if (getActiveCards().length < 4) { alert('Need at least 4 cards. Adjust tag filters or field mapping.'); return; }
+  roundSetIdx = 0; roundScore = 0;
+  show('quiz');
+  nextSet();
+}
+
+function nextSet() {
+  const set = buildSet();
+  setCards   = set.cards;
+  setMult    = set.mult;
+  tapCounter = 4;
+  selLeft    = null;
+  selRight   = null;
+  matchedIds = new Set();
+  renderSet();
+}
+
+function renderSet() {
+  document.getElementById('set-counter').textContent = `${roundSetIdx+1} / ${SETS_PER_ROUND}`;
+  document.getElementById('round-score').textContent = `${Math.round(roundScore)} pts`;
+  document.getElementById('multiplier').textContent  = `×${setMult.toFixed(1)}`;
+  updateDots();
+
+  fillCol('left-col',  shuffle(setCards), 'left');
+  fillCol('right-col', shuffle(setCards), 'right');
+}
+
+function fillCol(colId, cards, side) {
+  const col = document.getElementById(colId);
+  col.innerHTML = '';
+  for (const card of cards) {
+    const btn = document.createElement('button');
+    btn.className = 'card-btn' + (side === 'left' ? ' jp' : '');
+    btn.dataset.id = card.id;
+    if (side === 'left') btn.innerHTML = safeJp(card.japanese);
+    else                 btn.textContent = plainWithBreaks(card.meaning);
+    btn.addEventListener('click', () => onTap(card.id, side));
+    col.appendChild(btn);
+  }
+}
+
+function onTap(cardId, side) {
+  // Ignore if already matched
+  if (matchedIds.has(cardId)) return;
+
+  const colId = side === 'left' ? 'left-col' : 'right-col';
+  const btn   = document.querySelector(`#${colId} .card-btn[data-id="${CSS.escape(cardId)}"]`);
+  if (!btn || btn.disabled) return;
+
+  if (side === 'left') {
+    if (selLeft === cardId) { deselect('left'); return; }
+    deselect('left');
+    selLeft = cardId; btn.classList.add('selected');
+  } else {
+    if (selRight === cardId) { deselect('right'); return; }
+    deselect('right');
+    selRight = cardId; btn.classList.add('selected');
+  }
+
+  if (selLeft !== null && selRight !== null) resolveMatch();
+}
+
+function deselect(side) {
+  const id    = side === 'left' ? selLeft : selRight;
+  if (id === null) return;
+  const colId = side === 'left' ? 'left-col' : 'right-col';
+  const btn   = document.querySelector(`#${colId} .card-btn[data-id="${CSS.escape(id)}"]`);
+  if (btn) btn.classList.remove('selected');
+  if (side === 'left') selLeft = null; else selRight = null;
+}
+
+function resolveMatch() {
+  const correct = selLeft === selRight;
+  const pts     = Math.max(0, tapCounter);
+  tapCounter    = Math.max(0, tapCounter - 1);
+  updateDots();
+
+  const lBtn = document.querySelector(`#left-col  .card-btn[data-id="${CSS.escape(selLeft)}"]`);
+  const rBtn = document.querySelector(`#right-col .card-btn[data-id="${CSS.escape(selRight)}"]`);
+
+  if (correct) {
+    const earned = pts * setMult;
+    roundScore += earned;
+    matchedIds.add(selLeft);
+
+    [lBtn, rBtn].forEach(b => {
+      if (!b) return;
+      b.classList.remove('selected');
+      b.classList.add('matched');
+      b.disabled = true;
+    });
+    document.getElementById('round-score').textContent = `${Math.round(roundScore)} pts`;
+
+    if (matchedIds.size === setCards.length) setTimeout(onSetDone, 650);
+
+  } else {
+    [lBtn, rBtn].forEach(b => {
+      if (!b) return;
+      b.classList.remove('selected');
+      b.classList.add('wrong');
+      setTimeout(() => b.classList.remove('wrong'), 380);
+    });
+  }
+
+  selLeft = null; selRight = null;
+}
+
+function onSetDone() {
+  roundSetIdx++;
+  if (roundSetIdx >= SETS_PER_ROUND) showResult();
+  else nextSet();
+}
+
+function updateDots() {
+  const v = Math.max(0, tapCounter);
+  for (let i = 0; i < 4; i++) {
+    const d = document.getElementById(`dot-${i}`);
+    if (d) d.classList.toggle('on', i < v);
+  }
+}
+
+// ═══════════════════════════════════════════
+// RESULT
+// ═══════════════════════════════════════════
+function showResult() {
+  const score   = Math.round(roundScore);
+  const theorMax = SETS_PER_ROUND * 10 * 20; // 10 sets × 10 pts × ×20 mult
+  const pct     = score / theorMax;
+  const grade   = pct >= 0.8 ? '🏆 Excellent!' : pct >= 0.6 ? '⭐ Great!' : pct >= 0.4 ? '📈 Keep going!' : '💪 Practice makes perfect';
+
+  document.getElementById('final-score').textContent = score;
+  document.getElementById('result-max').textContent  = `pts · out of ${theorMax} theoretical max`;
+  document.getElementById('result-grade').textContent = grade;
+  show('result');
+}
+
+// ═══════════════════════════════════════════
+// BOOT + EVENTS
+// ═══════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    SQL = await initSqlJs({ locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${f}` });
+  } catch (e) {
+    const el = document.getElementById('upload-error');
+    el.textContent = 'Failed to load SQL engine: ' + e.message;
+    el.style.display = '';
+  }
+
+  // Upload
+  const dz      = document.getElementById('drop-zone');
+  const fileInp = document.getElementById('file-input');
+  dz.addEventListener('click', () => fileInp.click());
+  fileInp.addEventListener('change', e => { if (e.target.files[0]) loadApkg(e.target.files[0]); });
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('over');
+    if (e.dataTransfer.files[0]) loadApkg(e.dataTransfer.files[0]);
+  });
+
+  // Config
+  document.getElementById('deck-select').addEventListener('change', e => { if (!_deckLoading) loadDeck(e.target.value); });
+  document.getElementById('include-suspended').addEventListener('change', e => { settings.includeSuspended = e.target.checked; updateTagSummary(); });
+  document.getElementById('tag-all-btn').addEventListener('click', () => { selectedTags = new Set(allTags); renderTagChips(); });
+  document.getElementById('tag-none-btn').addEventListener('click', () => { selectedTags = new Set(); renderTagChips(); });
+  document.getElementById('notetype-select').addEventListener('change', e => {
+    if (_deckLoading) return;
+    selectedMid = e.target.value;
+    buildFieldSelects();
+    refreshPreview();
+  });
+  const ts = document.getElementById('temp-slider');
+  ts.addEventListener('input', () => {
+    settings.temperature = +ts.value;
+    document.getElementById('temp-val').textContent = (+ts.value).toFixed(1);
+  });
+  const ds = document.getElementById('dsim-slider');
+  ds.addEventListener('input', () => {
+    settings.distractorTemp = +ds.value;
+    document.getElementById('dsim-val').textContent = (+ds.value).toFixed(1);
+  });
+  document.getElementById('save-config-btn').addEventListener('click', saveConfig);
+  document.getElementById('load-config-btn').addEventListener('click', loadConfig);
+
+  // Nav
+  document.getElementById('start-btn').addEventListener('click', startRound);
+  document.getElementById('back-btn').addEventListener('click', () => show('upload'));
+  document.getElementById('quit-btn').addEventListener('click', () => show('config'));
+  document.getElementById('new-round-btn').addEventListener('click', startRound);
+  document.getElementById('config-btn').addEventListener('click', () => show('config'));
+});
+</script>
+</body>
+</html>
